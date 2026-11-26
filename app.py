@@ -73,20 +73,7 @@ Redacta un dictamen breve en Markdown:
 2. **Plan de Acción (3 pasos):** Genera 3 acciones concretas y aplicables."""
         
         try:
-            # Detectar automáticamente un modelo de chat activo en tu cuenta de Groq
-            modelos_disponibles = [
-                m.id for m in client.models.list().data
-                if not any(palabra in m.id.lower() for palabra in ["whisper", "guard", "tts", "playai", "embed"])
-            ]
-
-            if not modelos_disponibles:
-                st.error("❌ No se encontraron modelos de texto disponibles en tu cuenta de Groq.")
-                st.stop()
-
-            modelo_activo = next(
-                (m for m in modelos_disponibles if "llama" in m.lower()),
-                modelos_disponibles[0]
-            )
+            modelo_activo = "llama-3.3-70b-versatile"
 
             completion = client.chat.completions.create(
                 model=modelo_activo,
