@@ -13,7 +13,7 @@ st.set_page_config(page_title="Sistema Predictivo de Riesgo", page_icon="⚡")
 
 # --- 2. Configuración de la API Key de Groq ---
 try:
-    api_key = st.secrets["GROQ_API_KEY"]
+    api_key = st.secrets.get("GROQ_API_KEY", "gsk_TU_API_KEY_LOCAL_AQUI")
 except Exception:
     api_key = "gsk_TU_API_KEY_LOCAL_AQUI"
 
@@ -44,16 +44,17 @@ if st.button("Evaluar Estudiante"):
         'horas_estudio': horas_estudio
     }])
     
-    prediccion = modelo.predict(datos_entrada)[0]
-    probabilidades = modelo.predict_proba(datos_entrada)[0]
+    # Extraer valores escalares de forma segura
+    prediccion = int(modelo.predict(datos_entrada).item())
+    prob_exito_val, prob_riesgo_val = modelo.predict_proba(datos_entrada).flatten()
     
     st.subheader("📊 Diagnóstico del Modelo Predictivo")
     if prediccion == 1:
-        prob_riesgo = probabilidades[1] * 100
+        prob_riesgo = prob_riesgo_val * 100
         st.error(f"⚠️ **Riesgo Alto de Deserción** (Probabilidad: {prob_riesgo:.1f}%)")
         estado_texto = "ALTO RIESGO ACADÉMICO"
     else:
-        prob_exito = probabilidades[0] * 100
+        prob_exito = prob_exito_val * 100
         st.success(f"✅ **Bajo Riesgo Académico** (Probabilidad de Éxito: {prob_exito:.1f}%)")
         estado_texto = "BAJO RIESGO / BUEN RENDIMIENTO"
     
@@ -73,7 +74,22 @@ Redacta un dictamen breve en Markdown:
 2. **Plan de Acción (3 pasos):** Genera 3 acciones concretas y aplicables."""
         
         try:
-            modelo_activo = "llama-3.3-70b-versatile"
+            # Filtrar modelos de audio, voz y moderación para dejar solo chat activo
+            exclusiones = ("whisper", "guard", "tts", "playai", "embed", "orpheus", "audio", "speech", "vision")
+            modelos_disponibles = [
+                m.id for m in client.models.list().data
+                if not any(palabra in m.id.lower() for palabra in exclusiones)
+            ]
+
+            if not modelos_disponibles:
+                st.error("❌ No se encontraron modelos de texto activos en tu cuenta de Groq.")
+                st.stop()
+
+            # Preferir modelos gpt-oss, qwen o llama activos
+            modelo_activo = next(
+                (m for m in modelos_disponibles if any(k in m.lower() for k in ("gpt-oss", "qwen", "llama"))),
+                next(iter(modelos_disponibles))
+            )
 
             completion = client.chat.completions.create(
                 model=modelo_activo,
@@ -85,8 +101,9 @@ Redacta un dictamen breve en Markdown:
                 max_tokens=1024
             )
             
+            primer_resultado = next(iter(completion.choices))
             st.caption(f"⚡ Respuesta generada con el modelo: `{modelo_activo}`")
-            st.markdown(completion.choices[0].message.content)
+            st.markdown(primer_resultado.message.content)
             
         except Exception as e:
             st.error(f"❌ Error al consultar Groq API: {e}")
